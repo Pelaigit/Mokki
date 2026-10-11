@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f97316">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>ME Control</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#18202a;background:#f4f5f7}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{padding:22px 18px 12px;background:#fff;position:sticky;top:0;z-index:2;border-bottom:1px solid #e5e7eb}
+h1{font-size:23px;margin:0 0 4px} .sub{color:#697586;font-size:13px}
+nav{display:flex;gap:8px;padding:12px;overflow:auto;background:#fff}
+nav button{white-space:nowrap;border:0;border-radius:999px;padding:10px 13px;background:#edf0f3;color:#243040;font-weight:650}
+nav button.active{background:#f97316;color:white}
+main{padding:14px;max-width:720px;margin:auto}.view{display:none}.view.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.card,.panel{background:white;border:1px solid #e5e7eb;border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px #00000008}
+.action{width:100%;min-height:112px;text-align:left;border:0;border-radius:14px;padding:15px;background:#fff;border:1px solid #e5e7eb}
+.action b{display:block;font-size:17px;margin:7px 0}.action small{color:#657182;display:block}.action .emoji{font-size:24px}
+button{font:inherit;cursor:pointer}.primary{border:0;background:#f97316;color:#fff;border-radius:12px;padding:12px 14px;font-weight:700;width:100%;margin-top:8px}
+.secondary{border:1px solid #d4d9df;background:#fff;border-radius:10px;padding:9px 12px}
+label{display:block;font-weight:650;margin:12px 0 6px}input,select,textarea{font:inherit;width:100%;padding:12px;border:1px solid #cfd5dc;border-radius:10px;background:white}
+input[type=range]{padding:0} .row{display:flex;gap:10px;align-items:center}.row>*{flex:1}
+h2{font-size:18px;margin:4px 0 12px}.muted{color:#657182;font-size:13px;line-height:1.45}.command{font-family:ui-monospace,SFMono-Regular,monospace;color:#c65d00}
+.fanrow{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #edf0f3}.fanrow:last-child{border:0}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f7f8;padding:12px;border-radius:10px;min-height:60px}
+footer{font-size:12px;color:#6b7280;text-align:center;padding:16px}
+@media(max-width:360px){.grid{grid-template-columns:1fr}.action{min-height:85px}}
+</style>
+</head>
+<body>
+<header><h1>🌡️ Lämpöpumpun ohjaus</h1><div class="sub">Mitsubishi ME Control · tekstiviestiohjaus</div></header>
+<nav>
+<button class="active" data-view="control">Ohjaus</button><button data-view="settings">Asetukset</button>
+</nav>
+<main>
+<section class="view active" id="control">
+<div class="grid">
+<button class="action" onclick="sendCommand('#l')"><span class="emoji">🏠</span><b>Koti</b><small>Nykyinen kotiohjelma</small><small class="command">#l</small></button>
+<button class="action" onclick="sendCommand('#ly')"><span class="emoji">❄️</span><b>Ylläpito</b><small>Nykyinen ylläpito-ohjelma</small><small class="command">#ly</small></button>
+<button class="action" onclick="sendCommand('#l')"><span class="emoji">▶️</span><b>Päälle</b><small>Käynnistä kotiohjelma</small><small class="command">#l</small></button>
+<button class="action" onclick="sendCommand('OFF')"><span class="emoji">⏻</span><b>Pois päältä</b><small>Pysäytä pumppu</small><small class="command">OFF</small></button>
+</div>
+<div class="panel">
+<h2>Lämpötilan säätö – vain lämmitys</h2>
+<div class="row"><div><label for="temp">Lämpötila</label><input id="temp" type="number" min="16" max="31" value="22" step="1"></div><div style="padding-top:24px"><button class="primary" onclick="sendTemp()">Lähetä H-komento</button></div></div>
+<p class="muted">Komento muodostetaan muodossa <span class="command">H22</span>. Tarkista pumpun ja ohjaimen tukemat asetukset.</p>
+</div>
+<div class="panel"><h2>Tarkista pumpun tila</h2><p class="muted">Lähetä tilakysely. ME Controlin vastaus tulee tavalliseen Viestit-sovellukseen.</p><button class="primary" onclick="sendCommand('STATUS?')">Lähetä STATUS?</button></div>
+</section>
+
+<section class="view" id="settings">
+<div class="panel"><h2>Ohjaimen asetukset</h2><label for="phone">ME Controlin puhelinnumero</label><input id="phone" type="tel" placeholder="+358..."><button class="primary" onclick="savePhone()">Tallenna numero</button><p class="muted">Numero tallennetaan tämän selaimen paikalliseen muistiin.</p></div>
+<div class="panel"><h2>SET-toimintokäskyjen luonnokset</h2><p class="muted">Muokkaa sovelluksen luonnoksia. Lähetys avaa tekstiviestin; ohjaimen asetukset muuttuvat vasta, kun viesti lähetetään ja ohjain hyväksyy sen. Varmista syntaksi käyttöohjeesta.</p><div id="presets"></div></div>
+<div class="panel"><h2>Sovitut komennot</h2><div class="fanrow"><span>Koti</span><code>#l</code></div><div class="fanrow"><span>Ylläpito</span><code>#ly</code></div><div class="fanrow"><span>Päälle</span><code>#l</code></div><div class="fanrow"><span>Pois päältä</span><code>OFF</code></div><div class="fanrow"><span>Tilan kysely</span><code>STATUS?</code></div><div class="fanrow"><span>Lämmitys 22 °C</span><code>H22</code></div></div>
+</section>
+<footer>Prototyyppi · testaa komennot ensin turvallisesti</footer>
+</main>
+<script>
+const fans=[["Auto","0"],["Hiljainen","1"],["Pieni","2"],["Keskitaso","3"],["Suuri","4"],["Erittäin suuri","5"]];
+let presets=JSON.parse(localStorage.getItem("presets")||"null")||[
+ {slot:1,name:"KOTI",action:"H",temp:21,fan:"0"},
+ {slot:2,name:"YLLAPITO",action:"H",temp:21,fan:"0"},
+ {slot:3,name:"VARAUS",action:"H",temp:21,fan:"0"},
+ {slot:4,name:"VARAUS2",action:"H",temp:21,fan:"0"}
+];
+function showView(id){document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===id));}
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.view)));
+function sendTemp(){let t=Number(document.getElementById("temp").value);if(!Number.isInteger(t)||t<16||t>31){alert("Valitse lämpötila 16–31 °C.");return;}sendCommand("H"+t);}
+function sendCommand(cmd){
+ const phone=(document.getElementById("phone").value||localStorage.getItem("phone")||"").trim();
+ if(!phone){showView("settings");alert("Tallenna ensin ME Controlin puhelinnumero Asetukset-välilehdellä.");return;}
+ // Use sms: URL. iOS opens Messages with a prefilled recipient/body; user confirms sending.
+ location.href="sms:"+encodeURIComponent(phone)+"&body="+encodeURIComponent(cmd);
+}
+function savePhone(){const p=document.getElementById("phone").value.trim();localStorage.setItem("phone",p);alert("Puhelinnumero tallennettu.");}
+function renderPresets(){document.getElementById("presets").innerHTML=presets.map((p,i)=>`<details class="card"><summary><b>SET ${p.slot} · ${esc(p.name)}</b><div class="muted">${p.action} · ${p.temp} °C · puhallin ${p.fan}</div></summary><label>Nimi (enintään 8 merkkiä)</label><input id="pn${i}" value="${esc(p.name)}" maxlength="8" autocapitalize="none" spellcheck="false"><label>Toiminto</label><select id="pa${i}"><option value="H" ${p.action==="H"?"selected":""}>Lämmitys (H)</option><option value="A" ${p.action==="A"?"selected":""}>Automaattinen (A)</option></select><label>Lämpötila (16–31 °C)</label><input id="pt${i}" type="number" min="16" max="31" value="${p.temp}"><label>Puhallin</label><select id="pf${i}">${fans.map(f=>`<option value="${f[1]}" ${p.fan===f[1]?"selected":""}>${f[0]} (${f[1]})</option>`).join("")}</select><p class="command">SET ${p.slot} ${esc(p.name)} ${p.action} ${p.temp} ${p.fan}</p><button class="secondary" onclick="updatePreset(${i})">Tallenna luonnos</button> <button class="secondary" onclick="sendPreset(${i})">Avaa tekstiviesti</button></details>`).join("");}
+function updatePreset(i){let name=document.getElementById("pn"+i).value.trim();let t=Number(document.getElementById("pt"+i).value);if(!name||name.length>8||!Number.isInteger(t)||t<16||t>31){alert("Tarkista nimi (1–8 merkkiä) ja lämpötila (16–31 °C).");return;}presets[i]={...presets[i],name,action:document.getElementById("pa"+i).value,temp:t,fan:document.getElementById("pf"+i).value};localStorage.setItem("presets",JSON.stringify(presets));renderPresets();}
+function sendPreset(i){const p=presets[i];sendCommand(`SET ${p.slot} ${p.name} ${p.action} ${p.temp} ${p.fan}`);}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+document.getElementById("phone").value=localStorage.getItem("phone")||"";
+renderPresets();
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
+</script>
+</body>
+</html>
